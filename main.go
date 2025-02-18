@@ -1,146 +1,90 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
-	"net"
-	"sync"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
+type Tabsync struct {
+	isDead     []bool
+	isTLS      bool
+	isJitter   bool
+	tabCounter int
+}
+
+type Globsync struct {
+	outtext *widget.Entry
+}
+
+var glob Globsync
+
 func main() {
 	myApp := app.New()
 	myApp.Settings().SetTheme(theme.DarkTheme())
-	myWindow := myApp.NewWindow("Requisição TCP Cliente")
-	myWindow.Resize(fyne.NewSize(800, 600))	
+	myWindow := myApp.NewWindow("Guatá")
+	myWindow.Resize(fyne.NewSize(800, 800))
 	tabContainer := container.NewAppTabs()
 	tabContainer.SetTabLocation(container.TabLocationTop)
+	var tabs Tabsync
 
-	var tabCounter int
-	var mu sync.Mutex
-
-	hostEntry := widget.NewEntry()
-	hostEntry.SetPlaceHolder("host.com:8080")
-	hostEntry.Wrapping = fyne.TextTruncate
-	hostEntryContainer := container.New(layout.NewGridWrapLayout(fyne.NewSize(200, hostEntry.MinSize().Height)), hostEntry)
-
-	requestText := widget.NewMultiLineEntry()
-	requestText.SetPlaceHolder("Raw HTTP/1.1 request")
-	requestText.Wrapping = fyne.TextWrapBreak
-
-	responseText := widget.NewMultiLineEntry()
-	responseText.SetPlaceHolder("Raw HTTP/1.1 response")
-	responseText.Disable()
-	responseText.Wrapping = fyne.TextWrapBreak
-
-	sendButton := widget.NewButton("Send", func() {
-		host := hostEntry.Text
-		request := requestText.Text		
-		response, err := sendTCPRequest(host, request)
-		if err != nil {
-			responseText.SetText(fmt.Sprintf("Error: %v", err))
-			return
+	tabs.tabCounter = 0
+	settingsWindow := myApp.NewWindow("Configurations")
+	tlsContent := container.NewVBox(
+		widget.NewCheck("TLS certificate/chain verify", func(isSet bool) { tabs.isTLS = isSet }),
+	)
+	pluginsContent := container.NewVBox(
+		widget.NewLabel("Config de Plugins"),
+	)
+	mixContent := container.NewVBox(
+		widget.NewCheck("Print req/resp jitter ", func(isSet bool) { tabs.isJitter = isSet }),
+	)
+	tabs_conf := container.NewAppTabs(
+		container.NewTabItem("TLS", tlsContent),
+		container.NewTabItem("Plugins", pluginsContent),
+		container.NewTabItem("Others", mixContent),
+	)
+	settingsWindow.SetContent(tabs_conf)
+	settingsWindow.SetFixedSize(true)
+	settingsWindow.Resize(fyne.NewSize(350, 200))
+	settingsWindow.CenterOnScreen()
+	settingsWindow.Canvas().SetOnTypedKey(func(e *fyne.KeyEvent) {
+		if e.Name == fyne.KeyEscape {
+			settingsWindow.Hide()
 		}
-		responseText.SetText(string(response))		
+	})
+	settingsWindow.SetCloseIntercept(func() {
+		settingsWindow.Hide()
 	})
 
-	sendButtonContainer := container.New(layout.NewGridWrapLayout(sendButton.MinSize()), sendButton)
-
-	textSplitContainer := container.NewHSplit(requestText, responseText)
-	textSplitContainer.SetOffset(0.5)
-	textSplitWrapper := container.New(
-		layout.NewGridWrapLayout(fyne.NewSize(800, 500)),
-		textSplitContainer,
+	settingsButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+		settingsWindow.Show()
+	})
+	addTabButton := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
+		createNewTab(&tabs, tabContainer, &myWindow)
+	})
+	removeTabButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
+		removeTab(tabContainer, &tabs.isDead)
+	})
+	buttonsContainer := container.NewHBox(addTabButton, removeTabButton, settingsButton)
+	outputText := widget.NewMultiLineEntry()
+	outputText.SetPlaceHolder("Guatá output!")
+	outputText.Wrapping = fyne.TextWrapBreak
+	outputText.Disable()
+	glob.outtext = outputText
+	accordion := widget.NewAccordion(
+		widget.NewAccordionItem("", outputText),
 	)
-
-	createNewTab := func() {
-		mu.Lock()
-		defer mu.Unlock()
-		tabCounter++
-
-		content := container.NewVBox(
-			container.New(layout.NewGridWrapLayout(fyne.NewSize(0, 10))),
-			container.NewHBox(
-				widget.NewLabel("Host:Port "),
-				hostEntryContainer,
-				sendButtonContainer,
-			),
-			widget.NewLabel("Request:"),
-			textSplitWrapper,
-		)
-
-		tabContainer.Append(container.NewTabItem(fmt.Sprintf("Tab %d", tabCounter), content))		
-	}
-
-	removeTab := func() {
-		mu.Lock()
-		defer mu.Unlock()
-
-		if len(tabContainer.Items) > 0 {
-			selectedTab := tabContainer.Selected()
-
-			tabIndex := -1
-			for i, item := range tabContainer.Items {
-				if item == selectedTab {
-					tabIndex = i
-					break
-				}
-			}
-
-			if tabIndex != -1 {
-				copy(tabContainer.Items[tabIndex:], tabContainer.Items[tabIndex+1:])
-				tabContainer.Items = tabContainer.Items[:len(tabContainer.Items)-1]
-
-				if len(tabContainer.Items) > 0 {
-					if tabIndex < len(tabContainer.Items) {
-						tabContainer.SelectTabIndex(tabIndex)
-					} else {
-						tabContainer.SelectTabIndex(len(tabContainer.Items) - 1)
-					}
-				}
-			}
+	myWindow.SetContent(container.NewBorder(buttonsContainer, accordion, nil, nil, tabContainer))
+	createNewTab(&tabs, tabContainer, &myWindow)
+	myWindow.CenterOnScreen()
+	myWindow.SetOnClosed(func() {
+		for i := range tabs.isDead {
+			tabs.isDead[i] = true
 		}
-		tabContainer.Refresh()
-	}
-
-	addTabButton := container.New(layout.NewCenterLayout(), widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
-		createNewTab()
-	}))
-	removeTabButton := container.New(layout.NewCenterLayout(), widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
-		removeTab()
-	}))	
-
-	ButtonsContainer := container.NewHBox(addTabButton, removeTabButton)
-
-	myWindow.SetContent(
-		container.NewVBox(ButtonsContainer, tabContainer),
-	)
-	createNewTab()
-
+		settingsWindow.Close()
+	})
 	myWindow.ShowAndRun()
-}
-
-func sendTCPRequest(host string, request string) ([]byte, error) {
-	conn, err := net.Dial("tcp", host)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao conectar: %w", err)
-	}
-	defer conn.Close()
-
-	_, err = conn.Write([]byte(request))
-	if err != nil {
-		return nil, fmt.Errorf("erro ao enviar requisição: %w", err)
-	}
-
-	resp, err := ioutil.ReadAll(conn)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao ler a resposta: %w", err)
-	}
-
-	return resp, nil
 }
