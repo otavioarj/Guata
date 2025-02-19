@@ -37,7 +37,7 @@ func main() {
 	settingsWindow := myApp.NewWindow("Configurations")
 	glob.tlsVerify = widget.NewCheck("TLS certificate/chain verify", func(isSet bool) { tabs.isTLS = isSet })
 	glob.othjitter = widget.NewCheck("Print req/resp jitter ", func(isSet bool) { tabs.isJitter = isSet })
-	glob.tlsVerify.SetChecked(true)
+	glob.othjitter.SetChecked(true)
 	tlsContent := container.NewVBox(
 		glob.tlsVerify,
 	)
