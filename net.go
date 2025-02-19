@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/tls"
 	"errors"
 	"net"
@@ -87,7 +86,7 @@ func sendRequest(host string, request string, reqchan chan []byte, merr *string,
 			// If headers haven't been processed yet, find the header-body separator
 			if !headerOk {
 				// Look for the separator "\r\n\r\n" to separate header and body
-				endOfHeader := bytes.Index(data, []byte("\r\n\r\n"))
+				endOfHeader := byte_index(data, []byte("\r\n\r\n"))
 				if endOfHeader != -1 {
 					// If found, separate header and body
 					headers = append(headers, data[:endOfHeader+4]...) // Include "\r\n\r\n" in the header

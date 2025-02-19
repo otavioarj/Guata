@@ -16,7 +16,9 @@ type Tabsync struct {
 }
 
 type Globsync struct {
-	outtext *widget.Entry
+	outtext   *widget.Entry
+	tlsVerify *widget.Check
+	othjitter *widget.Check
 }
 
 var glob Globsync
@@ -31,15 +33,19 @@ func main() {
 	var tabs Tabsync
 
 	tabs.tabCounter = 0
+	// Default configs
 	settingsWindow := myApp.NewWindow("Configurations")
+	glob.tlsVerify = widget.NewCheck("TLS certificate/chain verify", func(isSet bool) { tabs.isTLS = isSet })
+	glob.othjitter = widget.NewCheck("Print req/resp jitter ", func(isSet bool) { tabs.isJitter = isSet })
+	glob.tlsVerify.SetChecked(true)
 	tlsContent := container.NewVBox(
-		widget.NewCheck("TLS certificate/chain verify", func(isSet bool) { tabs.isTLS = isSet }),
+		glob.tlsVerify,
 	)
 	pluginsContent := container.NewVBox(
-		widget.NewLabel("Config de Plugins"),
+		widget.NewLabel("Config Plugins??"),
 	)
 	mixContent := container.NewVBox(
-		widget.NewCheck("Print req/resp jitter ", func(isSet bool) { tabs.isJitter = isSet }),
+		glob.othjitter,
 	)
 	tabs_conf := container.NewAppTabs(
 		container.NewTabItem("TLS", tlsContent),

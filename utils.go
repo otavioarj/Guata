@@ -9,9 +9,42 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// Generic printer to GUI-outbox
 func myPrint(str string) {
 
 	glob.outtext.Append(time.Now().Format("15:04:05") + ": " + str + "\n")
+}
+
+// substring Knuth-Morris-Pratt (KMP)
+// byte_index returns the index of the first occurrence of b in a
+// It returns -1 if b is not found in a
+func byte_index(a, b []byte) int {
+	// If b is empty, we consider it found at position 0
+	if len(b) == 0 {
+		return 0
+	}
+	// If b is larger than a, b cannot be found in a, return -1
+	if len(b) > len(a) {
+		return -1
+	}
+
+	for i := 0; i <= len(a)-len(b); i++ {
+		match := true // Assume we have a match, and check each byte
+
+		// Compare each byte of b with the slice of a starting from i
+		for j := 0; j < len(b); j++ {
+			if a[i+j] != b[j] {
+				match = false // If any byte does not match, break
+				break
+			}
+		}
+		// If all bytes match, return the starting index
+		if match {
+			return i
+		}
+	}
+	// If no match is found, return -1
+	return -1
 }
 
 // Helper function to get Content-Length from the HTTP headers
