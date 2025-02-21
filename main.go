@@ -1,9 +1,14 @@
 package main
 
 import (
+	"crypto/tls"
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -19,12 +24,51 @@ type Globsync struct {
 	outtext   *widget.Entry
 	tlsVerify *widget.Check
 	othjitter *widget.Check
+	mtls      *tls.Certificate
 }
 
 var glob Globsync
 
+func mtlsfile(w fyne.Window, label *widget.Label, cert *tls.Certificate) {
+	var passwordDialog *dialog.CustomDialog
+	var er error
+	fileDialog := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
+		if err != nil || r == nil {
+			return
+		}
+		filePath := r.URI().Path()
+		myPrint("Selected cert: " + filePath)
+		label.SetText(filePath)
+		if filePath[len(filePath)-2:] == "fx" || filePath[len(filePath)-2:] == "12" {
+			passwordEntry := widget.NewEntry()
+			passwordEntry.SetPlaceHolder("No pass")
+			okButton := widget.NewButton("OK", func() {
+				password := passwordEntry.Text
+				passwordDialog.Hide()
+				myPrint("PKCS#12 mTLS mode - pass: " + password)
+				*cert, er = loadPKCS12Certificate(filePath, password)
+			})
+			passwordDialog = dialog.NewCustom("Certificate Pass", "X", container.NewVBox(
+				widget.NewLabel("PKCS#12 password:"),
+				passwordEntry,
+				okButton,
+			), w)
+			passwordDialog.Show()
+		} else {
+			myPrint("PEM mTLS mode")
+			*cert, er = tls.LoadX509KeyPair(filePath, filePath)
+		}
+		if er != nil {
+			myPrint(fmt.Sprintf("certificate error: %v\n", err))
+		}
+	}, w)
+
+	fileDialog.SetFilter(storage.NewExtensionFileFilter([]string{".pem", ".crt", ".p12", ".pfx"}))
+	fileDialog.Show()
+}
+
 func main() {
-	myApp := app.New()
+	myApp := app.NewWithID("br.guata")
 	myApp.Settings().SetTheme(theme.DarkTheme())
 	myWindow := myApp.NewWindow("Guatá")
 	myWindow.Resize(fyne.NewSize(800, 800))
@@ -38,7 +82,17 @@ func main() {
 	glob.tlsVerify = widget.NewCheck("TLS certificate/chain verify", func(isSet bool) { tabs.isTLS = isSet })
 	glob.othjitter = widget.NewCheck("Print req/resp jitter ", func(isSet bool) { tabs.isJitter = isSet })
 	glob.othjitter.SetChecked(true)
+	glob.mtls = &tls.Certificate{}
+	mTLStxt := widget.NewLabel("")
+	mTLSBtt := widget.NewButtonWithIcon("", theme.DocumentIcon(), func() {
+		mtlsfile(myWindow, mTLStxt, glob.mtls)
+	})
 	tlsContent := container.NewVBox(
+		container.NewHBox(
+			mTLSBtt,
+			widget.NewLabel("Client-cert (mTLS):"),
+			mTLStxt,
+		),
 		glob.tlsVerify,
 	)
 	pluginsContent := container.NewVBox(

@@ -2,21 +2,9 @@ package main
 
 import (
 	"crypto/tls"
-	"errors"
 	"net"
 	"time"
 )
-
-func isTLSHandshakeFailure(err error) bool {
-	var tlsErr *tls.RecordHeaderError
-	if err == nil {
-		return false
-	}
-	if errors.As(err, &tlsErr) {
-		return true
-	}
-	return err.Error() == "EOF"
-}
 
 func sendRequest(host string, request string, reqchan chan []byte, merr *string, sync *insync) {
 	var conn net.Conn
