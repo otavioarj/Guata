@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"net"
+	"slices"
 	"time"
 )
 
@@ -15,6 +16,7 @@ func sendRequest(host string, request string, reqchan chan []byte, merr *string,
 	var done chan bool
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: sync.tabs.isTLS,
+		Certificates:       []tls.Certificate{*glob.mtls},
 	}
 	defer close(reqchan)
 
@@ -44,8 +46,9 @@ func sendRequest(host string, request string, reqchan chan []byte, merr *string,
 				*merr = "err user aborted"
 				sync.syncAbort = false
 				done <- true
+				return
 			}
-			time.Sleep(time.Millisecond * 850)
+			time.Sleep(time.Millisecond * 550)
 		}
 	}()
 	// Read response in chunks
@@ -60,10 +63,16 @@ func sendRequest(host string, request string, reqchan chan []byte, merr *string,
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					*merr = "-1"
+					if !headerOk {
+						reqchan <- tmp
+					}
 					return
 				}
 				if err.Error() == "EOF" {
 					*merr = "0"
+					if !headerOk {
+						reqchan <- tmp
+					}
 					return
 				} else {
 					*merr = "err: response" + err.Error()
@@ -88,7 +97,7 @@ func sendRequest(host string, request string, reqchan chan []byte, merr *string,
 					}
 
 					// Send header once it's fully read and reset the buffer
-					reqchan <- append([]byte(nil), headers...)
+					reqchan <- slices.Clone(headers)
 					headers = nil   // Reset the headers after sending
 					headerOk = true // Mark the headers is ok
 				} else {
@@ -103,7 +112,7 @@ func sendRequest(host string, request string, reqchan chan []byte, merr *string,
 
 			// Send the body incrementally as data arrives
 			if len(body) > 0 {
-				reqchan <- append([]byte(nil), body...)
+				reqchan <- slices.Clone(body)
 				body = nil // Reset the body after sending
 			}
 
@@ -113,7 +122,7 @@ func sendRequest(host string, request string, reqchan chan []byte, merr *string,
 			}
 
 			// Check for end of chunked transfer encoding (e.g., "\r\n\r\n")
-			if len(body) >= 4 && cmpBytes(body[len(body)-4:], []byte{'\r', '\n', '\r', '\n'}) {
+			if len(data) >= 5 && cmpBytes(data[len(data)-5:], []byte{'0', '\r', '\n', '\r', '\n'}) {
 				return
 			}
 		}

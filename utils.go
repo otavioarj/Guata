@@ -119,7 +119,7 @@ func sendFunc(sync *insync, hostEntry, requestText, responseText *widget.Entry, 
 			sendButton.Text = "Send"
 			hostEntry.Enable()
 			requestText.Enable()
-			myPrint("Tab" + strconv.Itoa(sync.id) + "interrupted")
+			myPrint("Tab" + strconv.Itoa(sync.id) + " interrupted")
 			return
 		}
 		sendButton.SetText("Stop")
@@ -139,7 +139,7 @@ func sendFunc(sync *insync, hostEntry, requestText, responseText *widget.Entry, 
 				var result strings.Builder
 				for c := 0; c < len(ct1); c++ {
 					if ct1[c] == '\n' || ct1[c] == '\r' || ct1[c] == ' ' {
-						continue
+						break
 					}
 					result.WriteByte(ct1[c])
 				}
